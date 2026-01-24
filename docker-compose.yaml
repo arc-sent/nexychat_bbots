@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    container_name: db-container
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: "29042006"
+      POSTGRES_USER: "postgres"
+      POSTGRES_DB: "nexychat_bd"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: server-container
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+      - redis
+    restart: always
+    networks:
+      - backend
+
+volumes:
+  db-data:
+  redis-data:
+
+networks:
+  backend:
+    driver: bridge

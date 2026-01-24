@@ -1,0 +1,25 @@
+FROM node:18-alpine
+
+# Устанавливаем bash (если нужен)
+RUN apk add --no-cache bash
+
+WORKDIR /app
+
+# Копируем package.json и package-lock.json для кэша
+COPY package*.json ./
+
+# Устанавливаем все зависимости (включая dev)
+RUN npm install
+
+# Копируем весь проект
+COPY . .
+
+# Сборка TypeScript
+RUN npm run build
+
+# Генерация Prisma клиента
+RUN npx prisma generate --schema=src/server/prisma/schema.prisma
+
+# Запуск сервера
+WORKDIR /app/src/server
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run server:docker"]

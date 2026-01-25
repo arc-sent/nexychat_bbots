@@ -36,7 +36,6 @@ export class SearchService {
                     keys.push(...result[1]);
                 } while (cursor !== '0');
 
-                console.log('keys in communication', keys);
                 // Получаем данные пользователей из Redis
                 const pipeline = this.redis.pipeline();
                 keys.forEach(key => pipeline.hgetall(key));

@@ -56,7 +56,7 @@ export const FlirtSearch = new Scenes.WizardScene<MyContext>('flirtSearch', asyn
                     keyboard: [
                         [
                             {
-                                text: '↩️ Остановить поиск',
+                                text: '🚫 Остановить поиск',
                             }
                         ]
                     ],

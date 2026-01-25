@@ -7,6 +7,7 @@ import { bot } from '../bot/index';
 import { PrismaClient } from '@prisma/client';
 import { CheckService } from './services/chek.service';
 import cron from 'node-cron';
+import cors from 'cors';
 dotenv.config();
 
 export const redis = new Redis(process.env.URL_REDIS || '');
@@ -21,6 +22,7 @@ const main = async () => {
     const app = express();
 
     app.use(express.json());
+    app.use(cors());
     app.use(bot.webhookCallback('/webhook'))
     app.use('/user', UserRouter);
 

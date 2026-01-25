@@ -17,6 +17,7 @@
   "dependencies": {
     "@prisma/client": "^6.7.0",
     "axios": "^1.13.2",
+    "cors": "^2.8.6",
     "cron": "^4.4.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

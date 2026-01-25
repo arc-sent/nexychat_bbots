@@ -28,11 +28,10 @@ export const FlirtSearch = new Scenes.WizardScene<MyContext>('flirtSearch', asyn
                 {
                     parse_mode: 'HTML',
                     reply_markup: {
-                        inline_keyboard: [
+                        keyboard: [
                             [
                                 {
-                                    text: '↩️ Вернуться назад',
-                                    callback_data: 'stop'
+                                    text: '↩️ Вернуться назад'
                                 }
                             ]
                         ],
@@ -93,19 +92,7 @@ export const FlirtSearch = new Scenes.WizardScene<MyContext>('flirtSearch', asyn
         return ctx.scene.leave();
     }
 }, async (ctx) => {
-    if (!ctx.callbackQuery) {
-        return
-    }
 
-    if ('data' in ctx.callbackQuery) {
-        const data = ctx.callbackQuery.data;
-
-        if (data === 'stop') {
-            await formatMessagee.deleteMessage(ctx);
-
-            return ctx.scene.enter('register');
-        }
-    }
 
     const partnerId = await redis.hget(`session:flirt:${ctx.from?.id}`, "id");
     let targetUserId: number | null = Number(partnerId);
@@ -115,6 +102,10 @@ export const FlirtSearch = new Scenes.WizardScene<MyContext>('flirtSearch', asyn
     let targetendChat: number = Number(endChat);
 
     if (targetendChat == 1) {
+        if (!ctx.callbackQuery) {
+            return
+        }
+
         if ('data' in ctx.callbackQuery) {
             const data = ctx.callbackQuery.data;
 

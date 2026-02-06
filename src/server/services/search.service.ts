@@ -22,7 +22,7 @@ export class SearchService {
     }
 
     private log(...args: any[]) {
-        if (this.loggerEnabled) {
+        if (this.loggerEnabled === "true") {
             console.log('[SEARCH]', ...args);
         }
     }
@@ -192,7 +192,7 @@ export class FlirtService {
     }
 
     private log(...args: any[]) {
-        if (this.loggerEnabled) {
+        if (this.loggerEnabled === "true") {
             console.log('[FLIRT]', ...args);
         }
     }
@@ -251,7 +251,7 @@ export class FlirtService {
                     id: v.id,
                     premium: v.premium
                 })));
-                
+
                 for (const user of values) {
                     const partner = values.find(u =>
                         u.id !== user.id &&

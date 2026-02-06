@@ -10,6 +10,7 @@ export class SearchService {
     private bot: any;
     private prisma: PrismaClient;
     private urlcon;
+    private loggerEnabled;
     private intervalId: NodeJS.Timeout | null = null;
 
     constructor(redis: Redis, bot: any, prisma: PrismaClient) {
@@ -17,26 +18,39 @@ export class SearchService {
         this.bot = bot;
         this.prisma = prisma;
         this.urlcon = process.env.URLCON;
+        this.loggerEnabled = process.env.LOGGER;
+    }
+
+    private log(...args: any[]) {
+        if (this.loggerEnabled) {
+            console.log('[SEARCH]', ...args);
+        }
     }
 
     startBackgroundSearch() {
         if (this.intervalId) return;
 
-        console.log('🔍 Фоновый поиск общения запущен каждые 10 секунд...');
+        this.log('🔍 Фоновый поиск общения запущен (интервал 10 секунд)');
 
         this.intervalId = setInterval(async () => {
 
             try {
-                // Получаем все ключи очереди
                 const keys: string[] = [];
                 let cursor = '0';
                 do {
                     const result = await this.redis.scan(cursor, 'MATCH', 'queue:talk:*', 'COUNT', 500);
                     cursor = result[0];
                     keys.push(...result[1]);
+
+                    this.log('📦 SCAN batch:', cursor);
+
                 } while (cursor !== '0');
 
-                // Получаем данные пользователей из Redis
+                if (keys.length === 0) {
+                    this.log('ℹ Очередь пуста, пользователей нет');
+                    return;
+                }
+
                 const pipeline = this.redis.pipeline();
                 keys.forEach(key => pipeline.hgetall(key));
                 const results2: any = await pipeline.exec();
@@ -49,7 +63,14 @@ export class SearchService {
                         return 0;
                     });
 
+                this.log('📊 Отсортированные пользователи:', values.map(v => ({
+                    id: v.id,
+                    premium: v.premium
+                })));
+
                 for (const user of values) {
+                    this.log(`🔎 Подбор пары для user=${user.id}`);
+
                     const partner = values.find(u =>
                         u.id !== user.id &&
                         ((u.search !== user.search && u.gender !== user.gender) ||
@@ -58,13 +79,11 @@ export class SearchService {
 
                     if (!partner) continue;
 
-                    // Проверяем активные сессии, чтобы не создавать дубликат
                     const activeUserSession = await this.redis.exists(`session:talk:${user.id}`);
                     const activePartnerSession = await this.redis.exists(`session:talk:${partner.id}`);
 
                     if (activeUserSession || activePartnerSession) continue;
 
-                    // Получаем данные пользователей с историей чатов
                     const partnerData = await this.prisma.user.findFirst({
                         where: { id: partner.id },
                         include: { storyChats: true }
@@ -80,21 +99,18 @@ export class SearchService {
                         continue;
                     }
 
-                    // Проверяем историю, чтобы не создавать повторный чат
                     const partnerHistory = partnerData.storyChats ?? [];
                     const userHistory = userData.storyChats ?? [];
 
                     if (partnerHistory.find(s => s.storyId === user.id)) continue;
                     if (userHistory.find(s => s.storyId === partner.id)) continue;
 
-                    // Получаем данные для сообщений (гемы)
                     const conDataPartner = await axios.get(`${this.urlcon}/users/${partner.id}`, { validateStatus: () => true });
                     const conDataUser = await axios.get(`${this.urlcon}/users/${user.id}`, { validateStatus: () => true });
 
                     const formatGemsPartner = conDataPartner.status === 400 ? '0' : formatNumber(conDataPartner.data.message.coin);
                     const formatGemsUser = conDataUser.status === 400 ? '0' : formatNumber(conDataUser.data.message.coin);
 
-                    // Формируем сообщения
                     const partnerMessage = `
 <b>${partnerData.premium ? '⭐ PREMIUM ⭐' : '💘 Профиль пользователя'}</b>
 ${partnerData.ratingViewed ? '' : `<b>⭐️ Рейтинг: ${partnerData.rating}</b>\n`}
@@ -121,8 +137,6 @@ ${userData.coinViewed ? '' : `———————————————\n<b>
                     await this.redis.del(`session:talk:${partner.id}`);
                     await this.redis.hset(`session:talk:${partner.id}`, { id: user.id, reward: false, start: Date.now().toString(), end: 0 });
 
-
-                    // Отправляем сообщения и создаём сессии в Redis
                     this.bot.telegram.sendMessage(user.id, partnerMessage, {
                         parse_mode: 'HTML',
                         reply_markup: { keyboard: [[{ text: '⛔ Завершить чат' }]], resize_keyboard: true, one_time_keyboard: false }
@@ -166,6 +180,7 @@ export class FlirtService {
     private bot: any;
     private prisma: PrismaClient;
     private urlcon;
+    private loggerEnabled;
     private intervalId: NodeJS.Timeout | null = null;
 
     constructor(redis: Redis, bot: any, prisma: PrismaClient) {
@@ -173,14 +188,19 @@ export class FlirtService {
         this.bot = bot;
         this.prisma = prisma;
         this.urlcon = process.env.URLCON;
+        this.loggerEnabled = process.env.LOGGER;
     }
 
-
+    private log(...args: any[]) {
+        if (this.loggerEnabled) {
+            console.log('[FLIRT]', ...args);
+        }
+    }
 
     startBackgroundSearch() {
         if (this.intervalId) return;
 
-        console.log('🍓 Фоновый поиск флирт запущен каждые 10 секунд...');
+        this.log('🍓 Фоновый поиск флирт запущен каждые 10 секунд...');
 
         this.intervalId = setInterval(async () => {
             try {
@@ -197,7 +217,18 @@ export class FlirtService {
                     );
                     cursor = nextCursor;
                     keys.push(...batch);
+
+                    this.log('📦 SCAN batch in flirt:', {
+                        cursor,
+                        found: batch.length
+                    });
+
                 } while (cursor !== '0');
+
+                if (keys.length === 0) {
+                    this.log('ℹ Очередь пуста, пользователей нет в флирте');
+                    return;
+                }
 
                 if (keys.length < 2) {
                     return;
@@ -216,7 +247,11 @@ export class FlirtService {
                         return 0;
                     });
 
-
+                this.log('📊 Отсортированные пользователи:', values.map(v => ({
+                    id: v.id,
+                    premium: v.premium
+                })));
+                
                 for (const user of values) {
                     const partner = values.find(u =>
                         u.id !== user.id &&
